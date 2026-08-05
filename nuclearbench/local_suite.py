@@ -151,6 +151,7 @@ def run_local_suite(
                 log_root=log_root,
                 results_dir=results_dir,
                 html_report=output_dir / f"{spec.label}.html",
+                resume=resume,
             )
             summaries.append(summary)
             status.update(status="completed", summary=str(summary))
@@ -165,10 +166,25 @@ def run_local_suite(
             _write_json(manifest_path, run_manifest)
             torch_module = getattr(adapter, "_torch", None) if adapter is not None else None
             if adapter is not None:
+                model = getattr(adapter, "model", None)
+                if model is not None and hasattr(model, "cpu"):
+                    try:
+                        model.cpu()
+                    except Exception:
+                        pass
                 del adapter
             gc.collect()
             if torch_module is not None and torch_module.cuda.is_available():
-                torch_module.cuda.empty_cache()
+                try:
+                    torch_module.cuda.empty_cache()
+                    torch_module.cuda.ipc_collect()
+                except Exception as cleanup_exc:
+                    print(f"CUDA cleanup warning after {spec.label}: {cleanup_exc}", flush=True)
+                    # Reset the device context so later models can still run.
+                    try:
+                        torch_module.cuda.reset_peak_memory_stats()
+                    except Exception:
+                        pass
     run_manifest["finished_at"] = datetime.now(UTC).isoformat()
     _write_json(manifest_path, run_manifest)
     return summaries
@@ -206,7 +222,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--load_in_8bit", action="store_true")
     parser.add_argument("--download_only", action="store_true")
     parser.add_argument("--stop_on_error", action="store_true")
-    parser.add_argument("--resume", action="store_true", help="Reuse exact completed model summaries.")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Reuse exact completed model summaries and per-case report.json logs.",
+    )
     parser.add_argument("--skip_models", nargs="*", default=None, help="Manifest labels to record but not run.")
     parser.add_argument("--skip_reason", default="explicitly skipped by driver")
     parser.add_argument("--comparison_report", default=None)

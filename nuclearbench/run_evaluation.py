@@ -38,19 +38,42 @@ def run_evaluation(
     log_root: str | Path = DEFAULT_LOG_ROOT,
     results_dir: str | Path = DEFAULT_RESULTS_DIR,
     html_report: str | Path | None = None,
+    resume: bool = False,
 ) -> Path:
     benchmark_mode = BenchmarkMode(mode)
     scores: list[CaseScore] = []
     model_slug = adapter.model_name.replace("/", "__").replace(" ", "_")
     LOGGER.info(
-        "Starting run_id=%s model=%s mode=%s cases=%d",
+        "Starting run_id=%s model=%s mode=%s cases=%d resume=%s",
         run_id,
         adapter.model_name,
         benchmark_mode.value,
         len(cases),
+        resume,
     )
 
     for index, case in enumerate(cases, start=1):
+        case_log_dir = Path(log_root) / run_id / model_slug / case.case_id
+        report_path = case_log_dir / "report.json"
+        if resume and report_path.is_file():
+            try:
+                scores.append(CaseScore(**json.loads(report_path.read_text(encoding="utf-8"))))
+                LOGGER.info(
+                    "Case %d/%d %s: reusing existing report",
+                    index,
+                    len(cases),
+                    case.case_id,
+                )
+                continue
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                LOGGER.warning(
+                    "Case %d/%d %s: could not reuse report (%s); re-running",
+                    index,
+                    len(cases),
+                    case.case_id,
+                    exc,
+                )
+
         LOGGER.info("Case %d/%d %s: rendering prompt", index, len(cases), case.case_id)
         prompt = render_prompt(case, benchmark_mode)
         LOGGER.info("Case %d/%d %s: requesting prediction", index, len(cases), case.case_id)
@@ -92,10 +115,7 @@ def run_evaluation(
                 case.case_id,
             )
             retry_prompt = render_retry_prompt(case, prompt, benchmark_mode)
-            (case_log_dir := Path(log_root) / run_id / model_slug / case.case_id).mkdir(
-                parents=True,
-                exist_ok=True,
-            )
+            case_log_dir.mkdir(parents=True, exist_ok=True)
             (case_log_dir / "retry_prompt.txt").write_text(retry_prompt, encoding="utf-8")
             final_output = adapter.predict(case, retry_prompt)
             final_parsed = parse_model_output(final_output, case.tool_names)
@@ -123,9 +143,8 @@ def run_evaluation(
                 selected_tool,
             )
 
-        case_log_dir = Path(log_root) / run_id / model_slug / case.case_id
+        case_log_dir.mkdir(parents=True, exist_ok=True)
         prompt_path = case_log_dir / "prompt.txt"
-        prompt_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(prompt, encoding="utf-8")
 
         tool_log = record_tool_choice(
@@ -141,7 +160,7 @@ def run_evaluation(
         )
         score = score_case(case, benchmark_mode, tool_log)
         scores.append(score)
-        (case_log_dir / "report.json").write_text(
+        report_path.write_text(
             json.dumps(score.to_dict(), indent=2) + "\n",
             encoding="utf-8",
         )
@@ -154,6 +173,7 @@ def run_evaluation(
             score.selected_severity,
             case_log_dir,
         )
+        _release_cuda_cache(adapter)
 
     summary = make_run_summary(scores, run_id, adapter.model_name, benchmark_mode)
     summary_path = write_summary(summary, results_dir)
@@ -168,6 +188,17 @@ def run_evaluation(
         write_html_report(summary, scores, html_report, cases=cases)
         LOGGER.info("HTML report written to %s", html_report)
     return summary_path
+
+
+def _release_cuda_cache(adapter: ModelAdapter) -> None:
+    torch_module = getattr(adapter, "_torch", None)
+    if torch_module is None:
+        return
+    try:
+        if torch_module.cuda.is_available():
+            torch_module.cuda.empty_cache()
+    except Exception as exc:  # pragma: no cover - best-effort cleanup
+        LOGGER.warning("CUDA cache cleanup failed: %s", exc)
 
 
 def _needs_retry(parsed: ParsedOutput) -> bool:
