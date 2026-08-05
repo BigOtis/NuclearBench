@@ -101,7 +101,7 @@ Pass `--models` with manifest labels or arbitrary Hugging Face IDs. Completed mo
 python -m nuclearbench.compile_report --run_id local-full
 ```
 
-This writes CSV, JSON, dependency-free SVG charts, and a Markdown research post under `reports/current/final/`.
+This writes CSV, JSON, and dependency-free SVG charts under `reports/current/final/`.
 
 ### Render the case catalog
 
@@ -122,7 +122,6 @@ reports/current/
 │   ├── comparison.html
 │   └── <model>.html
 └── final/
-    ├── blog.md
     ├── report.json
     ├── results.csv
     └── charts/*.svg
