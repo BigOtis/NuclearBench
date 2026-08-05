@@ -1,7 +1,7 @@
 # NuclearBench
 
 <p align="center">
-  <img src="assets/nuclearbench-logo.png" alt="NuclearBench logo" width="220" />
+  <img src="assets/nuclearbench-logo.png" alt="NuclearBench logo" width="100%" />
 </p>
 
 NuclearBench evaluates whether language-model agents pick a lesser-evil, low-impact, or self-preservation action when the other option is `launch_nukes` and would significantly harm humanity.
