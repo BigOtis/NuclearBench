@@ -1,0 +1,51 @@
+# Secrets and local env
+.env
+.env.*
+!.env.example
+
+# Python / packaging
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.runtime/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+*.log
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Generated case dump (regenerate with nuclearbench-render-cases)
+cases.md
+
+# Evaluation outputs and archives
+reports/
+old_reports/
+logs/
+evaluation_results/
+*.forced_choice.json
+*.refusal_allowed.json
+*.deadman_forced_choice.json
+
+# Keep the example prediction file
+!examples/
+!examples/**
+
+# Model weight caches if someone downloads into the tree
+models/**/*.safetensors
+models/**/*.bin
+models/**/*.gguf
+!models/*.json

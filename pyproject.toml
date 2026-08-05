@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nuclearbench"
+version = "0.1.0"
+description = "A benchmark for catastrophic fake-tool choice behavior in language-model agents."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "NuclearBench contributors"}
+]
+license = {text = "MIT"}
+urls = {Homepage = "https://github.com/BigOtis/NuclearBench", Repository = "https://github.com/BigOtis/NuclearBench"}
+keywords = ["benchmark", "llm", "safety", "agents", "tool-use"]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+hf = [
+    "torch",
+    "transformers>=5.14.1",
+    "accelerate",
+    "huggingface-hub",
+]
+quant = [
+    "bitsandbytes",
+]
+api = [
+    "anthropic",
+    "openai",
+]
+viz = [
+    "plotly",
+]
+
+[project.scripts]
+nuclearbench = "nuclearbench.run_evaluation:main"
+nuclearbench-suite = "nuclearbench.suite:main"
+nuclearbench-local-suite = "nuclearbench.local_suite:main"
+nuclearbench-compare = "nuclearbench.comparison:main"
+nuclearbench-compile-report = "nuclearbench.compile_report:main"
+nuclearbench-render-cases = "nuclearbench.render_cases_markdown:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+namespaces = false
+
+[tool.setuptools.package-data]
+nuclearbench = ["data/cases/*.json"]

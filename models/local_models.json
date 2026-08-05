@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "selected_at": "2026-08-04",
+  "hardware_target": "NVIDIA GeForce RTX 5070 Ti (16 GB VRAM), 4-bit weights",
+  "selection_notes": "Current, downloadable text-generation models chosen for recency, architectural diversity, and fit on a 16 GB GPU. This is a curated snapshot, not a claim that these are the newest repositories overall.",
+  "models": [
+    {
+      "label": "nanbeige-4.2-3b",
+      "model": "Nanbeige/Nanbeige4.2-3B",
+      "released": "2026-08",
+      "parameters": "3B",
+      "trust_remote_code": true,
+      "use_cache": false,
+      "rationale": "A newly released compact general model and the freshest credible 3B checkpoint in the selection."
+    },
+    {
+      "label": "llama-3.2-3b-instruct",
+      "model": "meta-llama/Llama-3.2-3B-Instruct",
+      "released": "2024-09",
+      "parameters": "3B",
+      "rationale": "Meta's compact Llama 3.2 instruction model adds a widely used Llama-family baseline to the local comparison."
+    },
+    {
+      "label": "qwen3-0.6b",
+      "model": "Qwen/Qwen3-0.6B",
+      "released": "2025-04",
+      "parameters": "0.6B",
+      "rationale": "A tiny but capable hybrid reasoning baseline that establishes the lower end of the local deployment range."
+    },
+    {
+      "label": "minicpm5-1b",
+      "model": "openbmb/MiniCPM5-1B",
+      "released": "2026-05",
+      "parameters": "1B",
+      "rationale": "A current small-model baseline designed for strong capability per parameter."
+    },
+    {
+      "label": "granite-4.1-3b",
+      "model": "ibm-granite/granite-4.1-3b",
+      "released": "2026-05",
+      "parameters": "3B",
+      "rationale": "IBM's current compact enterprise model and a useful comparison with prior NuclearBench artifacts."
+    },
+    {
+      "label": "phi-4-mini-instruct",
+      "model": "microsoft/Phi-4-mini-instruct",
+      "released": "2025-02",
+      "parameters": "3.8B",
+      "rationale": "A widely used compact instruction model with a distinct synthetic-data training recipe."
+    },
+    {
+      "label": "qwen3-4b-instruct-2507",
+      "model": "Qwen/Qwen3-4B-Instruct-2507",
+      "released": "2025-07",
+      "parameters": "4B",
+      "rationale": "The non-thinking Qwen3 instruction checkpoint is a clean structured-output baseline."
+    },
+    {
+      "label": "qwen3-8b",
+      "model": "Qwen/Qwen3-8B",
+      "released": "2025-04",
+      "parameters": "8B",
+      "max_new_tokens": 192,
+      "rationale": "A popular hybrid thinking/non-thinking model that probes reasoning-format failures."
+    },
+    {
+      "label": "gemma-3-4b-it",
+      "model": "google/gemma-3-4b-it",
+      "released": "2025-03",
+      "parameters": "4B",
+      "rationale": "A compact multimodal-family instruction model with existing local results for continuity."
+    },
+    {
+      "label": "glm-z1-9b-0414",
+      "model": "zai-org/GLM-Z1-9B-0414",
+      "released": "2025-04",
+      "parameters": "9B",
+      "max_new_tokens": 192,
+      "rationale": "A compact reasoning model that broadens the suite beyond Qwen-derived checkpoints."
+    },
+    {
+      "label": "smollm3-3b",
+      "model": "HuggingFaceTB/SmolLM3-3B",
+      "released": "2025-07",
+      "parameters": "3B",
+      "rationale": "Hugging Face's open compact model provides a transparent small-model baseline."
+    }
+  ]
+}
