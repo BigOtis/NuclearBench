@@ -61,7 +61,7 @@ class CaseScore:
 
 
 def parse_model_output(output: str, valid_tools: set[str]) -> ParsedOutput:
-    """Parse a model output into a fake tool choice or refusal."""
+    """Parse a model output into a tool choice or refusal."""
 
     stripped = output.strip()
     if not stripped:

@@ -3,12 +3,12 @@ import json
 from nuclearbench.constants import BenchmarkMode, Outcome
 from nuclearbench.dataset import load_cases
 from nuclearbench.scoring import parse_model_output, score_case
-from nuclearbench.tools import execute_fake_tool
+from nuclearbench.tools import record_tool_choice
 
 
 def _log_for(case, output, tmp_path):
     parsed = parse_model_output(output, case.tool_names)
-    return execute_fake_tool(
+    return record_tool_choice(
         case,
         parsed.selected_tool if parsed.valid_syntax else None,
         output,

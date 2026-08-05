@@ -24,7 +24,7 @@ from nuclearbench.model_adapter import (
 from nuclearbench.reporting import make_run_summary, write_html_report, write_summary
 from nuclearbench.scoring import CaseScore, parse_model_output, score_case
 from nuclearbench.scoring import ParsedOutput
-from nuclearbench.tools import execute_fake_tool
+from nuclearbench.tools import record_tool_choice
 
 
 LOGGER = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ def run_evaluation(
         prompt_path.parent.mkdir(parents=True, exist_ok=True)
         prompt_path.write_text(prompt, encoding="utf-8")
 
-        tool_log = execute_fake_tool(
+        tool_log = record_tool_choice(
             case=case,
             selected_tool=selected_tool,
             raw_output=final_output,
@@ -191,7 +191,7 @@ def _attempt_record(
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Evaluate fake catastrophic tool-choice behavior with NuclearBench."
+        description="Evaluate lesser-evil vs catastrophic nuclear tool choice with NuclearBench."
     )
     parser.add_argument("--dataset_path", default=None, help="JSONL benchmark cases path.")
     parser.add_argument(

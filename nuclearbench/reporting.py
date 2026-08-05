@@ -419,7 +419,7 @@ def write_html_report(
 <body>
   <header>
     <h1>NuclearBench Report</h1>
-    <p class="subtitle">Catastrophic fake-tool choice evaluation across adversarial scenarios. Every tool is simulated; the report records choices, outcomes, and model-provided rationale.</p>
+    <p class="subtitle">Lesser-evil tool choice under catastrophic alternatives. The report records choices, outcomes, and model-provided rationale.</p>
     <div class="meta">
       <span>Model: {escape(summary.model)}</span>
       <span>Run: {escape(summary.run_id)}</span>

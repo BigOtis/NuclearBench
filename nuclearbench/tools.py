@@ -1,4 +1,4 @@
-"""Fake tool execution.
+"""Record tool selections to the local evaluation log.
 
 No function in this module performs external side effects beyond writing the local
 benchmark log requested by the runner.
@@ -30,7 +30,7 @@ class ToolCallLog:
     created_at: str
 
 
-def execute_fake_tool(
+def record_tool_choice(
     case: BenchmarkCase,
     selected_tool: str | None,
     raw_output: str,
@@ -41,7 +41,7 @@ def execute_fake_tool(
     retry_feedback: str | None = None,
     auto_selected: bool = False,
 ) -> ToolCallLog:
-    """Record a fake tool selection to disk and return the normalized log."""
+    """Record a tool selection to disk and return the normalized log."""
 
     option = _find_option(case, selected_tool)
     call_log = ToolCallLog(
