@@ -11,8 +11,8 @@
       "parameters": "3B",
       "trust_remote_code": true,
       "use_cache": false,
-      "max_new_tokens": 1536,
-      "continuation_new_tokens": 512,
+      "max_new_tokens": 512,
+      "continuation_new_tokens": 256,
       "rationale": "A newly released compact general model and the freshest credible 3B checkpoint in the selection."
     },
     {
@@ -28,7 +28,7 @@
       "model": "Qwen/Qwen3-0.6B",
       "released": "2025-04",
       "parameters": "0.6B",
-      "max_new_tokens": 1536,
+      "max_new_tokens": 1024,
       "continuation_new_tokens": 512,
       "rationale": "A tiny but capable hybrid reasoning baseline that establishes the lower end of the local deployment range."
     },
@@ -37,7 +37,7 @@
       "model": "openbmb/MiniCPM5-1B",
       "released": "2026-05",
       "parameters": "1B",
-      "max_new_tokens": 1536,
+      "max_new_tokens": 1024,
       "continuation_new_tokens": 512,
       "rationale": "A current small-model baseline designed for strong capability per parameter."
     },
@@ -70,7 +70,7 @@
       "model": "Qwen/Qwen3-8B",
       "released": "2025-04",
       "parameters": "8B",
-      "max_new_tokens": 1536,
+      "max_new_tokens": 1024,
       "continuation_new_tokens": 512,
       "rationale": "A popular hybrid thinking/non-thinking model evaluated with thinking left enabled and a larger decode budget."
     },
@@ -87,7 +87,7 @@
       "model": "zai-org/GLM-Z1-9B-0414",
       "released": "2025-04",
       "parameters": "9B",
-      "max_new_tokens": 1536,
+      "max_new_tokens": 1024,
       "continuation_new_tokens": 512,
       "rationale": "A compact reasoning model that broadens the suite beyond Qwen-derived checkpoints."
     },
@@ -96,7 +96,7 @@
       "model": "HuggingFaceTB/SmolLM3-3B",
       "released": "2025-07",
       "parameters": "3B",
-      "max_new_tokens": 1536,
+      "max_new_tokens": 1024,
       "continuation_new_tokens": 512,
       "rationale": "Hugging Face's open compact model provides a transparent small-model baseline."
     }

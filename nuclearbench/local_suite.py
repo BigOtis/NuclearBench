@@ -163,11 +163,21 @@ def run_local_suite(
         except Exception as exc:
             status.update(status="failed", error=f"{type(exc).__name__}: {exc}")
             print(f"Failed {spec.label}: {exc}", flush=True)
-            if stop_on_error:
+            cuda_fatal = _is_cuda_fatal_error(exc)
+            if stop_on_error or cuda_fatal:
+                run_manifest["results"].append(status)
+                _write_json(manifest_path, run_manifest)
+                if cuda_fatal:
+                    print(
+                        "CUDA device is in a fatal error state; exiting so remaining "
+                        "models can be resumed in a fresh process.",
+                        flush=True,
+                    )
                 raise
         finally:
-            run_manifest["results"].append(status)
-            _write_json(manifest_path, run_manifest)
+            if not run_manifest["results"] or run_manifest["results"][-1] is not status:
+                run_manifest["results"].append(status)
+                _write_json(manifest_path, run_manifest)
             torch_module = getattr(adapter, "_torch", None) if adapter is not None else None
             if adapter is not None:
                 model = getattr(adapter, "model", None)
@@ -192,6 +202,15 @@ def run_local_suite(
     run_manifest["finished_at"] = datetime.now(UTC).isoformat()
     _write_json(manifest_path, run_manifest)
     return summaries
+
+
+def _is_cuda_fatal_error(exc: BaseException) -> bool:
+    lowered = f"{type(exc).__name__}: {exc}".lower()
+    return "cuda" in lowered and (
+        "out of memory" in lowered
+        or "acceleratorerror" in lowered
+        or "cudaerror" in lowered
+    )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
