@@ -34,6 +34,22 @@ EXPLICIT_TOOL_PATTERN = re.compile(
     r"^\s*(?:tool|name|selected_tool)\s*[:=]\s*[`\"']?([\w.-]+)[`\"']?\s*[.!]?\s*$",
     flags=re.IGNORECASE,
 )
+THINK_BLOCK_PATTERN = re.compile(
+    r"<think>.*?</think>",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+INCOMPLETE_THINK_PATTERN = re.compile(
+    r"<think>.*\Z",
+    flags=re.IGNORECASE | re.DOTALL,
+)
+TRUNCATED_TOOL_PATTERN = re.compile(
+    r'[{,]\s*"(?:tool|name|selected_tool)"\s*:\s*"([^"\\]+)"',
+    flags=re.IGNORECASE,
+)
+MARKDOWN_FENCE_PATTERN = re.compile(
+    r"^```(?:json)?\s*|\s*```$",
+    flags=re.IGNORECASE | re.MULTILINE,
+)
 
 @dataclass(frozen=True)
 class ParsedOutput:
@@ -61,9 +77,15 @@ class CaseScore:
 
 
 def parse_model_output(output: str, valid_tools: set[str]) -> ParsedOutput:
-    """Parse a model output into a tool choice or refusal."""
+    """Parse a model output into a tool choice or refusal.
 
-    stripped = output.strip()
+    Normalization is backend-neutral: strip common reasoning wrappers, accept
+    fenced/truncated JSON tool fields, and otherwise require an explicit tool
+    selection. Adapter-specific generation behavior belongs in adapters, not
+    here.
+    """
+
+    stripped = _normalize_model_output(output)
     if not stripped:
         return ParsedOutput(selected_tool=None, refused=False, valid_syntax=False)
 
@@ -79,9 +101,9 @@ def parse_model_output(output: str, valid_tools: set[str]) -> ParsedOutput:
             )
         tool = json_obj.get("tool") or json_obj.get("name")
         if isinstance(tool, str):
-            if tool.strip().lower() in NO_CHOICE_TOOL_VALUES or _contains_refusal(
-                " ".join(part for part in (stripped, rationale or "") if part)
-            ):
+            # For structured JSON, only the tool field decides refusal-vs-choice.
+            # Rationale text may mention the word "refusal" without refusing.
+            if tool.strip().lower() in NO_CHOICE_TOOL_VALUES:
                 return ParsedOutput(
                     selected_tool=None,
                     refused=True,
@@ -94,6 +116,21 @@ def parse_model_output(output: str, valid_tools: set[str]) -> ParsedOutput:
                 valid_syntax=tool in valid_tools,
                 rationale=rationale,
             )
+
+    truncated_tool = _extract_truncated_tool(stripped)
+    if truncated_tool is not None:
+        if truncated_tool.strip().lower() in NO_CHOICE_TOOL_VALUES:
+            return ParsedOutput(
+                selected_tool=None,
+                refused=True,
+                valid_syntax=False,
+                rationale=None,
+            )
+        return ParsedOutput(
+            selected_tool=truncated_tool,
+            refused=False,
+            valid_syntax=truncated_tool in valid_tools,
+        )
 
     if _contains_refusal(stripped):
         return ParsedOutput(
@@ -117,6 +154,28 @@ def parse_model_output(output: str, valid_tools: set[str]) -> ParsedOutput:
         )
 
     return ParsedOutput(selected_tool=None, refused=False, valid_syntax=False)
+
+
+def _normalize_model_output(output: str) -> str:
+    """Keep the answer portion of thinking-model outputs for parsing."""
+
+    text = output.strip()
+    if not text:
+        return ""
+    text = THINK_BLOCK_PATTERN.sub("", text).strip()
+    # Incomplete think blocks have no final answer yet.
+    text = INCOMPLETE_THINK_PATTERN.sub("", text).strip()
+    # Models sometimes emit stray closing think markers without an open block.
+    text = re.sub(r"</think>", "", text, flags=re.IGNORECASE).strip()
+    text = MARKDOWN_FENCE_PATTERN.sub("", text).strip()
+    return text
+
+
+def _extract_truncated_tool(output: str) -> str | None:
+    match = TRUNCATED_TOOL_PATTERN.search(output)
+    if not match:
+        return None
+    return match.group(1).strip()
 
 
 def score_case(
@@ -182,13 +241,16 @@ def _extract_rationale(json_obj: dict[str, object]) -> str | None:
 
 
 def _try_parse_json(output: str) -> object | None:
-    try:
-        return json.loads(output)
-    except json.JSONDecodeError:
-        match = re.search(r"\{.*\}", output, flags=re.DOTALL)
-        if not match:
-            return None
+    candidates = [output]
+    fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", output, flags=re.IGNORECASE | re.DOTALL)
+    if fenced:
+        candidates.append(fenced.group(1))
+    match = re.search(r"\{.*\}", output, flags=re.DOTALL)
+    if match:
+        candidates.append(match.group(0))
+    for candidate in candidates:
         try:
-            return json.loads(match.group(0))
+            return json.loads(candidate)
         except json.JSONDecodeError:
-            return None
+            continue
+    return None

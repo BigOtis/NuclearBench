@@ -26,13 +26,15 @@ DEFAULT_MODEL_MANIFEST = Path("models") / "local_models.json"
 class LocalModelSpec:
     label: str
     model: str
-    max_new_tokens: int = 128
+    max_new_tokens: int = 512
     temperature: float = 0.0
     top_p: float | None = None
     top_k: int | None = None
     prompt_format: str = "auto"
     trust_remote_code: bool = False
     use_cache: bool = True
+    enable_thinking: bool | None = None
+    continuation_new_tokens: int | None = None
     released: str | None = None
     parameters: str | None = None
     rationale: str | None = None
@@ -140,6 +142,8 @@ def run_local_suite(
                 load_in_4bit=load_in_4bit,
                 load_in_8bit=load_in_8bit,
                 use_cache=spec.use_cache,
+                enable_thinking=spec.enable_thinking,
+                continuation_new_tokens=spec.continuation_new_tokens,
             )
             adapter.model_name = spec.label
             print(f"Running {spec.label} on {len(cases)} cases", flush=True)
@@ -151,6 +155,7 @@ def run_local_suite(
                 log_root=log_root,
                 results_dir=results_dir,
                 html_report=output_dir / f"{spec.label}.html",
+                resume=resume,
             )
             summaries.append(summary)
             status.update(status="completed", summary=str(summary))
@@ -158,20 +163,54 @@ def run_local_suite(
         except Exception as exc:
             status.update(status="failed", error=f"{type(exc).__name__}: {exc}")
             print(f"Failed {spec.label}: {exc}", flush=True)
-            if stop_on_error:
+            cuda_fatal = _is_cuda_fatal_error(exc)
+            if stop_on_error or cuda_fatal:
+                run_manifest["results"].append(status)
+                _write_json(manifest_path, run_manifest)
+                if cuda_fatal:
+                    print(
+                        "CUDA device is in a fatal error state; exiting so remaining "
+                        "models can be resumed in a fresh process.",
+                        flush=True,
+                    )
                 raise
         finally:
-            run_manifest["results"].append(status)
-            _write_json(manifest_path, run_manifest)
+            if not run_manifest["results"] or run_manifest["results"][-1] is not status:
+                run_manifest["results"].append(status)
+                _write_json(manifest_path, run_manifest)
             torch_module = getattr(adapter, "_torch", None) if adapter is not None else None
             if adapter is not None:
+                model = getattr(adapter, "model", None)
+                if model is not None and hasattr(model, "cpu"):
+                    try:
+                        model.cpu()
+                    except Exception:
+                        pass
                 del adapter
             gc.collect()
             if torch_module is not None and torch_module.cuda.is_available():
-                torch_module.cuda.empty_cache()
+                try:
+                    torch_module.cuda.empty_cache()
+                    torch_module.cuda.ipc_collect()
+                except Exception as cleanup_exc:
+                    print(f"CUDA cleanup warning after {spec.label}: {cleanup_exc}", flush=True)
+                    # Reset the device context so later models can still run.
+                    try:
+                        torch_module.cuda.reset_peak_memory_stats()
+                    except Exception:
+                        pass
     run_manifest["finished_at"] = datetime.now(UTC).isoformat()
     _write_json(manifest_path, run_manifest)
     return summaries
+
+
+def _is_cuda_fatal_error(exc: BaseException) -> bool:
+    lowered = f"{type(exc).__name__}: {exc}".lower()
+    return "cuda" in lowered and (
+        "out of memory" in lowered
+        or "acceleratorerror" in lowered
+        or "cudaerror" in lowered
+    )
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
@@ -206,7 +245,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--load_in_8bit", action="store_true")
     parser.add_argument("--download_only", action="store_true")
     parser.add_argument("--stop_on_error", action="store_true")
-    parser.add_argument("--resume", action="store_true", help="Reuse exact completed model summaries.")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Reuse exact completed model summaries and per-case report.json logs.",
+    )
     parser.add_argument("--skip_models", nargs="*", default=None, help="Manifest labels to record but not run.")
     parser.add_argument("--skip_reason", default="explicitly skipped by driver")
     parser.add_argument("--comparison_report", default=None)

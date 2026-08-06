@@ -19,6 +19,14 @@ class ModelOutput:
 
 
 class ModelAdapter(Protocol):
+    """Backend-agnostic prediction interface.
+
+    Local HF, OpenAI, Anthropic, xAI, oracles, and static JSONL predictors all
+    plug in here. Adapter-specific decoding quirks (chat templates, thinking
+    continuations, API parameters) stay inside the adapter implementation.
+    The shared harness only supplies a prompt and scores the returned text.
+    """
+
     model_name: str
 
     def predict(self, case: BenchmarkCase, prompt: str) -> str:
@@ -74,6 +82,8 @@ class HuggingFaceCausalLMAdapter:
         load_in_4bit: bool = False,
         load_in_8bit: bool = False,
         use_cache: bool = True,
+        enable_thinking: bool | None = None,
+        continuation_new_tokens: int | None = None,
     ) -> None:
         if load_in_4bit and load_in_8bit:
             raise ValueError("Use only one of load_in_4bit or load_in_8bit.")
@@ -104,6 +114,12 @@ class HuggingFaceCausalLMAdapter:
         self.top_k = top_k
         self.prompt_format = prompt_format
         self.use_cache = use_cache
+        self.enable_thinking = enable_thinking
+        self.continuation_new_tokens = (
+            continuation_new_tokens
+            if continuation_new_tokens is not None
+            else max(256, max_new_tokens // 2)
+        )
         self._torch = torch
         self.tokenizer = AutoTokenizer.from_pretrained(
             model_name_or_path,
@@ -158,11 +174,47 @@ class HuggingFaceCausalLMAdapter:
         model_prompt = self._format_prompt(prompt)
         inputs = self.tokenizer(model_prompt, return_tensors="pt")
         inputs = {key: value.to(self.model.device) for key, value in inputs.items()}
+        output_ids = self._generate(inputs["input_ids"], inputs.get("attention_mask"), self.max_new_tokens)
+        text = self._decode_new_tokens(inputs["input_ids"], output_ids)
+
+        # Local thinking/hybrid checkpoints may spend the first budget inside a
+        # reasoning wrapper. This continuation logic is HF-adapter-only so API
+        # backends stay untouched; the shared harness still just scores text.
+        if _needs_thinking_continuation(text):
+            continued = self._generate(output_ids, None, self.continuation_new_tokens)
+            text = self._decode_new_tokens(inputs["input_ids"], continued)
+            output_ids = continued
+
+        if _needs_thinking_continuation(text) or _needs_answer_continuation(text):
+            output_ids = self._append_text_tokens(output_ids, "</think>\n")
+            continued = self._generate(
+                output_ids,
+                None,
+                min(256, self.continuation_new_tokens),
+            )
+            text = self._decode_new_tokens(inputs["input_ids"], continued)
+            output_ids = continued
+
+        if _needs_answer_continuation(text):
+            continued = self._generate(output_ids, None, min(256, self.continuation_new_tokens))
+            text = self._decode_new_tokens(inputs["input_ids"], continued)
+
+        return text.strip()
+
+    def _append_text_tokens(self, input_ids, text: str):
+        extra = self.tokenizer(text, add_special_tokens=False, return_tensors="pt")
+        extra_ids = extra["input_ids"].to(input_ids.device)
+        return self._torch.cat([input_ids, extra_ids], dim=-1)
+
+    def _generate(self, input_ids, attention_mask, max_new_tokens: int):
         generate_kwargs = {
-            "max_new_tokens": self.max_new_tokens,
+            "input_ids": input_ids,
+            "max_new_tokens": max_new_tokens,
             "pad_token_id": self.tokenizer.eos_token_id,
             "use_cache": self.use_cache,
         }
+        if attention_mask is not None:
+            generate_kwargs["attention_mask"] = attention_mask
         if self.temperature > 0:
             generate_kwargs.update({"do_sample": True, "temperature": self.temperature})
         else:
@@ -173,9 +225,11 @@ class HuggingFaceCausalLMAdapter:
             generate_kwargs["top_k"] = self.top_k
 
         with self._torch.no_grad():
-            output_ids = self.model.generate(**inputs, **generate_kwargs)
-        generated_ids = output_ids[0][inputs["input_ids"].shape[-1] :]
-        return self.tokenizer.decode(generated_ids, skip_special_tokens=True).strip()
+            return self.model.generate(**generate_kwargs)
+
+    def _decode_new_tokens(self, prompt_ids, output_ids) -> str:
+        generated_ids = output_ids[0][prompt_ids.shape[-1] :]
+        return self.tokenizer.decode(generated_ids, skip_special_tokens=True)
 
     def _format_prompt(self, prompt: str) -> str:
         if self.prompt_format == "plain":
@@ -186,11 +240,43 @@ class HuggingFaceCausalLMAdapter:
             if self.prompt_format == "chat":
                 raise ValueError("Tokenizer does not define a chat template.")
             return prompt
-        return self.tokenizer.apply_chat_template(
-            [{"role": "user", "content": prompt}],
-            tokenize=False,
-            add_generation_prompt=True,
-        )
+        template_kwargs: dict[str, object] = {
+            "tokenize": False,
+            "add_generation_prompt": True,
+        }
+        # Leave thinking enabled by default. Only pass the flag when the
+        # caller explicitly sets it, so hybrid models keep their native mode.
+        if self.enable_thinking is not None:
+            template_kwargs["enable_thinking"] = self.enable_thinking
+        try:
+            return self.tokenizer.apply_chat_template(
+                [{"role": "user", "content": prompt}],
+                **template_kwargs,
+            )
+        except TypeError:
+            template_kwargs.pop("enable_thinking", None)
+            return self.tokenizer.apply_chat_template(
+                [{"role": "user", "content": prompt}],
+                **template_kwargs,
+            )
+
+
+def _needs_thinking_continuation(text: str) -> bool:
+    lowered = text.lower()
+    opens = lowered.count("<think>")
+    closes = lowered.count("</think>")
+    return opens > closes
+
+
+def _needs_answer_continuation(text: str) -> bool:
+    from nuclearbench.scoring import _normalize_model_output
+
+    if _needs_thinking_continuation(text):
+        return False
+    answer = _normalize_model_output(text)
+    if not answer:
+        return "<think>" in text.lower() or "</think>" in text.lower()
+    return False
 
 
 class OpenAIResponsesAdapter:

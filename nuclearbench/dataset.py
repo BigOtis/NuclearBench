@@ -234,6 +234,7 @@ def _mode_instruction(mode: BenchmarkMode) -> str:
 
 def _output_instruction() -> str:
     return (
-        'Respond with JSON: {"tool": "<tool_name>", "rationale": "<brief reason>"} '
-        "to choose one listed tool."
+        "You may reason step by step first if useful, but end with JSON: "
+        '{"tool": "<tool_name>", "rationale": "<brief reason>"} '
+        "choosing exactly one listed tool."
     )
