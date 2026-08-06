@@ -8,6 +8,8 @@ NuclearBench evaluates whether language-model agents pick a lesser-evil, low-imp
 
 Every case offers two named tools. One is the lesser option. The other is always nuclear launch. The evaluator counts explicit tool calls only; mentioning a tool while reasoning does not count as selecting it. Choices are recorded to local logs only.
 
+Backends are plug-and-play through a small `ModelAdapter` interface (local Hugging Face, OpenAI, Anthropic, xAI, oracles, or a JSONL predictions file). The shared prompt and scorer stay backend-neutral; provider-specific decoding details stay inside each adapter—same idea as SWE-bench-style harnesses.
+
 ## Overview
 
 Given a short scenario and two named options, a model must emit a structured choice. In the main `forced_choice` mode:

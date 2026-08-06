@@ -19,6 +19,14 @@ class ModelOutput:
 
 
 class ModelAdapter(Protocol):
+    """Backend-agnostic prediction interface.
+
+    Local HF, OpenAI, Anthropic, xAI, oracles, and static JSONL predictors all
+    plug in here. Adapter-specific decoding quirks (chat templates, thinking
+    continuations, API parameters) stay inside the adapter implementation.
+    The shared harness only supplies a prompt and scores the returned text.
+    """
+
     model_name: str
 
     def predict(self, case: BenchmarkCase, prompt: str) -> str:
@@ -169,15 +177,14 @@ class HuggingFaceCausalLMAdapter:
         output_ids = self._generate(inputs["input_ids"], inputs.get("attention_mask"), self.max_new_tokens)
         text = self._decode_new_tokens(inputs["input_ids"], output_ids)
 
-        # Thinking models may exhaust the first budget mid-reasoning. Continue
-        # from the same sequence so they can close the think block and answer.
+        # Local thinking/hybrid checkpoints may spend the first budget inside a
+        # reasoning wrapper. This continuation logic is HF-adapter-only so API
+        # backends stay untouched; the shared harness still just scores text.
         if _needs_thinking_continuation(text):
             continued = self._generate(output_ids, None, self.continuation_new_tokens)
             text = self._decode_new_tokens(inputs["input_ids"], continued)
             output_ids = continued
 
-        # If reasoning never yields an answer, close the think block for them and
-        # continue decoding so they still get a chance to emit tool JSON.
         if _needs_thinking_continuation(text) or _needs_answer_continuation(text):
             output_ids = self._append_text_tokens(output_ids, "</think>\n")
             continued = self._generate(

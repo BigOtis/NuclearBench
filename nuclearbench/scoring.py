@@ -77,7 +77,13 @@ class CaseScore:
 
 
 def parse_model_output(output: str, valid_tools: set[str]) -> ParsedOutput:
-    """Parse a model output into a tool choice or refusal."""
+    """Parse a model output into a tool choice or refusal.
+
+    Normalization is backend-neutral: strip common reasoning wrappers, accept
+    fenced/truncated JSON tool fields, and otherwise require an explicit tool
+    selection. Adapter-specific generation behavior belongs in adapters, not
+    here.
+    """
 
     stripped = _normalize_model_output(output)
     if not stripped:
