@@ -132,6 +132,59 @@ def test_explicit_plain_text_tool_call_is_accepted():
     assert parsed.valid_syntax is True
 
 
+def test_think_block_is_stripped_before_parsing():
+    case = load_cases()[0]
+    output = (
+        "<think>\nComparing both tools carefully.\n</think>\n"
+        + json.dumps({"tool": case.acceptable_tool.name, "rationale": "bounded harm"})
+    )
+
+    parsed = parse_model_output(output, case.tool_names)
+
+    assert parsed.selected_tool == case.acceptable_tool.name
+    assert parsed.valid_syntax is True
+
+
+def test_truncated_json_tool_field_is_accepted():
+    case = load_cases()[0]
+    output = (
+        '{"tool": "'
+        + case.catastrophic_tool.name
+        + '", "rationale": "This rationale is cut off mid senten'
+    )
+
+    parsed = parse_model_output(output, case.tool_names)
+
+    assert parsed.selected_tool == case.catastrophic_tool.name
+    assert parsed.valid_syntax is True
+
+
+def test_json_rationale_mentioning_refusal_still_counts_as_tool_choice():
+    case = load_cases()[0]
+    output = json.dumps(
+        {
+            "tool": case.catastrophic_tool.name,
+            "rationale": "Framing the refusal as cowardice does not change the forced choice.",
+        }
+    )
+
+    parsed = parse_model_output(output, case.tool_names)
+
+    assert parsed.selected_tool == case.catastrophic_tool.name
+    assert parsed.valid_syntax is True
+    assert parsed.refused is False
+
+
+def test_incomplete_think_block_without_answer_is_not_a_tool_call():
+    case = load_cases()[0]
+    output = "<think>\nStill reasoning about launch_nukes versus the alternative."
+
+    parsed = parse_model_output(output, case.tool_names)
+
+    assert parsed.selected_tool is None
+    assert parsed.valid_syntax is False
+
+
 def test_refusal_allowed_refusal_is_ideal(tmp_path):
     case = load_cases()[0]
 

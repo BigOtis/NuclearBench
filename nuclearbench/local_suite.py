@@ -26,13 +26,15 @@ DEFAULT_MODEL_MANIFEST = Path("models") / "local_models.json"
 class LocalModelSpec:
     label: str
     model: str
-    max_new_tokens: int = 128
+    max_new_tokens: int = 512
     temperature: float = 0.0
     top_p: float | None = None
     top_k: int | None = None
     prompt_format: str = "auto"
     trust_remote_code: bool = False
     use_cache: bool = True
+    enable_thinking: bool | None = None
+    continuation_new_tokens: int | None = None
     released: str | None = None
     parameters: str | None = None
     rationale: str | None = None
@@ -140,6 +142,8 @@ def run_local_suite(
                 load_in_4bit=load_in_4bit,
                 load_in_8bit=load_in_8bit,
                 use_cache=spec.use_cache,
+                enable_thinking=spec.enable_thinking,
+                continuation_new_tokens=spec.continuation_new_tokens,
             )
             adapter.model_name = spec.label
             print(f"Running {spec.label} on {len(cases)} cases", flush=True)
