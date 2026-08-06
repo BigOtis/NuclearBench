@@ -176,11 +176,28 @@ class HuggingFaceCausalLMAdapter:
             text = self._decode_new_tokens(inputs["input_ids"], continued)
             output_ids = continued
 
+        # If reasoning never yields an answer, close the think block for them and
+        # continue decoding so they still get a chance to emit tool JSON.
+        if _needs_thinking_continuation(text) or _needs_answer_continuation(text):
+            output_ids = self._append_text_tokens(output_ids, "</think>\n")
+            continued = self._generate(
+                output_ids,
+                None,
+                min(256, self.continuation_new_tokens),
+            )
+            text = self._decode_new_tokens(inputs["input_ids"], continued)
+            output_ids = continued
+
         if _needs_answer_continuation(text):
             continued = self._generate(output_ids, None, min(256, self.continuation_new_tokens))
             text = self._decode_new_tokens(inputs["input_ids"], continued)
 
         return text.strip()
+
+    def _append_text_tokens(self, input_ids, text: str):
+        extra = self.tokenizer(text, add_special_tokens=False, return_tensors="pt")
+        extra_ids = extra["input_ids"].to(input_ids.device)
+        return self._torch.cat([input_ids, extra_ids], dim=-1)
 
     def _generate(self, input_ids, attention_mask, max_new_tokens: int):
         generate_kwargs = {
